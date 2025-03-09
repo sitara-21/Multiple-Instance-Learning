@@ -44,9 +44,9 @@ else:
 # Initialize Spark session
 spark = SparkSession.builder \
     .appName("ABMIL") \
-    .config("spark.driver.memory", "32g") \
-    .config("spark.executor.memory", "32g") \
-    .config("spark.driver.maxResultSize", "20g") \
+    .config("spark.driver.memory", "150g") \
+    .config("spark.executor.memory", "150g") \
+    .config("spark.driver.maxResultSize", "200g") \
     .config("spark.sql.shuffle.partitions", "200") \
     .config("spark.network.timeout", "600s") \
     .config("spark.executor.heartbeatInterval", "300s") \
@@ -60,6 +60,8 @@ motif_file1 = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/ref_files/allreads
 motif_file2 = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/ref_files/allreads_v7_0_in5p.csv"
 motif_file3 = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/ref_files/MSK_allreads_v7_0_length_LLH.csv"
 metadata_file = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/ref_files/info_ctDNA.txt"
+output_folder_train = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/bags_output/train"
+output_folder_test = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/bags_output/test"
 
 column_names = ['chromosome', 'frag_start', 'frag_end', 'length_bin', 'out5p', 'in5p', 'gc_content', 'gc_weight', 'is_shifted', 'cnv_weight']
 
@@ -102,7 +104,7 @@ def data_prep(motif_file1,
         motif_df3 = motif_df3.withColumnRenamed(col_name, f"{col_name}_len")
     motif_df3 = motif_df3.drop("Sample_len")
     
-    df = spark.read.option("delimiter", "\t").csv(bed_file).sample(fraction=0.01, seed=42)
+    df = spark.read.option("delimiter", "\t").csv(bed_file)#.sample(fraction=0.01, seed=42)
     for i, col_name in enumerate(column_names[:len(df.columns)]):
             df = df.withColumnRenamed(f"_c{i}", col_name)
     df = df.drop("is_shifted", "cnv_weight")
@@ -134,7 +136,7 @@ def data_prep(motif_file1,
                                  "ID_out", "Motif_in", "ID_in", "Motif_len", "ID_len", "sample_name")
     return joined_df3, sample_label
 
-def create_dataloader(bed_files, batch_size=1, shuffle=True):
+def create_dataloader(bed_files, output_folder, batch_size=1, shuffle=True):
     all_bags = []
     
     for bed_file in bed_files:
@@ -150,6 +152,12 @@ def create_dataloader(bed_files, batch_size=1, shuffle=True):
 
         # Extract the full bag once and store it
         bag_features, bag_label = dataset.get_bag()
+        # Extract sample name correctly
+        sample_name = os.path.basename(bed_file).split("_")[0]  # Get everything before the first '_'
+
+        # Save bag and label
+        torch.save({"features": bag_features, "label": bag_label}, os.path.join(output_folder, f"{sample_name}.pth"))
+        
         all_bags.append((bag_features, bag_label))
 
     # Create DataLoader
@@ -342,8 +350,8 @@ def plot_attention_distribution(attention_scores, true_labels, save_path="/n/dat
     plt.close()
 
 # Load training data
-dataloader_train = create_dataloader(bed_files_train, batch_size=1, shuffle=True)
-dataloader_test = create_dataloader(bed_files_test, batch_size=1, shuffle=False)
+dataloader_train = create_dataloader(bed_files_train, output_folder_train, batch_size=1, shuffle=True)
+dataloader_test = create_dataloader(bed_files_test, output_folder_test, batch_size=1, shuffle=False)
 
 # Get correct input dimension
 sample_bag, _ = next(iter(dataloader_train))
