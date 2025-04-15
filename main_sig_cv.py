@@ -58,8 +58,8 @@ spark = SparkSession.builder \
 
 
 # bed_file = './samples/MRL0008CHraw_filtered_bedcov_annotated_all_fragments_fix_shifted_chrlab.bed'
-bed_files_path_train = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/bed_files_train_test.txt"
-bed_files_path_test = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/bed_files_test_test.txt"
+bed_files_path_train = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/bed_files_train.txt"
+bed_files_path_test = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/bed_files_test.txt"
 motif_file1 = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/ref_files/allreads_v7_0_out5p.csv"
 motif_file2 = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/ref_files/allreads_v7_0_in5p.csv"
 motif_file3 = "/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/ref_files/MSK_allreads_v7_0_length_LLH.csv"
@@ -108,7 +108,7 @@ def data_prep(motif_file1,
         motif_df3 = motif_df3.withColumnRenamed(col_name, f"{col_name}_len")
     motif_df3 = motif_df3.drop("Sample_len")
     
-    df = spark.read.option("delimiter", "\t").csv(bed_file).sample(fraction=0.6, seed=42)
+    df = spark.read.option("delimiter", "\t").csv(bed_file).sample(fraction=0.4, seed=42)
     for i, col_name in enumerate(column_names[:len(df.columns)]):
             df = df.withColumnRenamed(f"_c{i}", col_name)
     df = df.drop("is_shifted", "cnv_weight")
@@ -255,7 +255,7 @@ def train_model(model, dataloader, epochs=20, lr=0.001, plot_results=True):
 
         plt.title('Training Loss and AUC vs Epochs')
         fig.tight_layout()
-        plt.savefig("./plots/training_metrics_combined.png", dpi=300)
+        plt.savefig(f"/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/plots/training_metrics_combined{run_no}.png", dpi=300)
 
         fpr, tpr, _ = roc_curve(all_labels, all_probs)
         plt.figure(figsize=(8, 6))
@@ -454,7 +454,7 @@ cv_fold_aucs = []
 kf = KFold(n_splits=10, shuffle=True, random_state=42)
 
 for fold, (train_idx, val_idx) in enumerate(kf.split(full_data)):
-    print(f"\n[CV] Fold {fold + 1}/4")
+    print(f"\n[CV] Fold {fold + 1}/10")
 
     fold_train_data = [full_data[i] for i in train_idx]
     fold_val_data = [full_data[i] for i in val_idx]
@@ -466,11 +466,11 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(full_data)):
     fold_model = Attention(input_dim, hidden_dim).to(torch.device("cpu"))
 
     # Train on fold
-    trained_model, _, _ = train_model(fold_model, fold_train_loader, epochs=10, lr=0.001, plot_results=False)
+    trained_model_cv, _, _ = train_model(fold_model, fold_train_loader, epochs=10, lr=0.001, plot_results=False)
 
     # Evaluate on validation fold
     val_auc, _, _ = evaluate_model_with_attention(
-        trained_model, fold_val_loader, roc_save_path=f"/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/plots/cv_fold_{fold+1}_roc_run{run_no}.png"
+        trained_model_cv, fold_val_loader, roc_save_path=f"/n/data1/hms/dbmi/gulhan/lab/ankit/scripts/MIL/plots/cv_fold_{fold+1}_roc_run{run_no}.png"
     )
     cv_fold_aucs.append(val_auc)
 
